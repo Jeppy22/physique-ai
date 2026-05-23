@@ -1,18 +1,6 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ChevronDown, Dumbbell, RotateCcw } from 'lucide-react';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
-import { Slider } from '@/components/ui/slider';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import type { Gender, LifterState, Phase, TrainingSplit } from '@/lib/types';
 import {
   type HeightUnit,
@@ -22,12 +10,23 @@ import {
   weightToDisplay,
   weightToKg,
 } from '@/lib/units';
+import { cn } from '@/lib/utils';
 
 interface StatsSidebarProps {
   lifterState: LifterState;
   onChange: (next: LifterState) => void;
   onReset: () => void;
 }
+
+/* ---------- shared styles ---------- */
+
+const inputBase =
+  'block w-full border border-terminal-border bg-terminal-bg-elevated text-terminal-text placeholder:text-terminal-text-faint px-2 py-1 text-[13px] focus:border-terminal-amber focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed';
+const inputNum = `${inputBase} text-right tabular-nums`;
+const labelCls =
+  'text-[10px] font-medium uppercase text-terminal-text-dim';
+
+/* ---------- primitives ---------- */
 
 interface NumberInputProps {
   value: number | null;
@@ -61,7 +60,7 @@ function NumberInput({
   }, [value, raw]);
 
   return (
-    <Input
+    <input
       type="number"
       inputMode="decimal"
       min={min}
@@ -69,7 +68,7 @@ function NumberInput({
       step={step}
       placeholder={placeholder}
       value={raw}
-      className={className}
+      className={cn(inputNum, className)}
       onChange={(e) => {
         const v = e.target.value;
         setRaw(v);
@@ -94,11 +93,18 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-1.5">
-      <Label className="text-xs text-zinc-400">
+    <div className="flex flex-col gap-1">
+      <label
+        className={labelCls}
+        style={{ letterSpacing: '0.1em' }}
+      >
         {label}
-        {hint && <span className="text-zinc-600"> · {hint}</span>}
-      </Label>
+        {hint && (
+          <span className="ml-1 text-terminal-text-faint normal-case tracking-normal">
+            · {hint}
+          </span>
+        )}
+      </label>
       {children}
     </div>
   );
@@ -116,13 +122,17 @@ function Section({
   return (
     <details
       open={defaultOpen}
-      className="group rounded-md border border-zinc-800 bg-zinc-900/30 [&[open]_.chev]:rotate-180"
+      className="group border border-terminal-border bg-terminal-black"
     >
-      <summary className="flex cursor-pointer list-none items-center justify-between select-none px-3 py-2.5 text-sm font-medium text-zinc-200 [&::-webkit-details-marker]:hidden">
+      <summary
+        className="flex cursor-pointer select-none list-none items-center gap-2 px-3 py-2 text-[11px] font-bold uppercase text-terminal-text-dim hover:text-terminal-text group-open:text-terminal-amber [&::-webkit-details-marker]:hidden"
+        style={{ letterSpacing: '0.15em' }}
+      >
+        <span className="inline-block w-3 group-open:hidden">{'>'}</span>
+        <span className="hidden w-3 group-open:inline">▼</span>
         <span>{title}</span>
-        <ChevronDown className="chev h-4 w-4 text-zinc-500 transition-transform" />
       </summary>
-      <div className="flex flex-col gap-3 border-t border-zinc-800 p-3">
+      <div className="flex flex-col gap-3 border-t border-terminal-border p-3">
         {children}
       </div>
     </details>
@@ -139,18 +149,23 @@ function SegmentedButtons<T extends string>({
   onSelect: (v: T) => void;
 }) {
   return (
-    <div className="flex flex-wrap gap-1.5">
-      {options.map((opt) => (
-        <Button
+    <div className="inline-flex flex-wrap">
+      {options.map((opt, i) => (
+        <button
           key={opt.value}
           type="button"
-          size="sm"
-          variant={value === opt.value ? 'default' : 'outline'}
           onClick={() => onSelect(opt.value)}
-          className="h-7 px-2.5 text-xs"
+          className={cn(
+            'relative border px-3 py-1.5 text-[11px] font-medium uppercase transition-colors',
+            i > 0 && '-ml-px',
+            value === opt.value
+              ? 'z-10 border-terminal-amber bg-terminal-amber-bg text-terminal-amber'
+              : 'border-terminal-border bg-terminal-black text-terminal-text-dim hover:border-terminal-border-bright hover:text-terminal-text',
+          )}
+          style={{ letterSpacing: '0.1em' }}
         >
           {opt.label}
-        </Button>
+        </button>
       ))}
     </div>
   );
@@ -166,55 +181,62 @@ function UnitToggle<U extends string>({
   onChange: (u: U) => void;
 }) {
   return (
-    <div className="flex gap-0.5 rounded-md border border-zinc-800 p-0.5">
+    <div className="flex items-baseline gap-1.5">
       {units.map((u) => (
         <button
           key={u}
           type="button"
           onClick={() => onChange(u)}
-          className={`rounded px-2 py-0.5 text-xs transition-colors ${
+          className={cn(
+            'text-[10px] font-medium uppercase',
             value === u
-              ? 'bg-zinc-700 text-zinc-100'
-              : 'text-zinc-400 hover:text-zinc-200'
-          }`}
+              ? 'text-terminal-amber'
+              : 'text-terminal-text-dim hover:text-terminal-text',
+          )}
+          style={{ letterSpacing: '0.1em' }}
         >
-          {u}
+          [{u.toUpperCase()}]
         </button>
       ))}
     </div>
   );
 }
 
-function SliderField({
-  label,
+function TerminalSelect<T extends string>({
   value,
-  onValueChange,
+  options,
+  placeholder,
+  onChange,
 }: {
-  label: string;
-  value: number | null;
-  onValueChange: (v: number) => void;
+  value: T | null;
+  options: { value: T; label: string }[];
+  placeholder: string;
+  onChange: (v: T | null) => void;
 }) {
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-center justify-between">
-        <Label className="text-xs text-zinc-400">{label}</Label>
-        <span className="text-xs tabular-nums text-zinc-300">
-          {value ?? '—'} / 10
-        </span>
-      </div>
-      <Slider
-        min={1}
-        max={10}
-        step={1}
-        value={[value ?? 5]}
-        onValueChange={(v) => {
-          const n = Array.isArray(v) ? v[0] : v;
-          if (typeof n === 'number') onValueChange(n);
-        }}
-      />
+    <div className="relative">
+      <select
+        value={value ?? ''}
+        onChange={(e) => onChange((e.target.value as T) || null)}
+        className={cn(inputBase, 'cursor-pointer appearance-none pr-7')}
+      >
+        <option value="" disabled>
+          {placeholder}
+        </option>
+        {options.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
+      <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-terminal-amber">
+        ▼
+      </span>
     </div>
   );
 }
+
+/* ---------- sidebar ---------- */
 
 export function StatsSidebar({
   lifterState,
@@ -238,32 +260,34 @@ export function StatsSidebar({
     lifterState.phase === 'cut' || lifterState.phase === 'peak_week';
 
   return (
-    <div className="flex h-full max-h-screen flex-col bg-zinc-950">
-      <header className="flex items-center justify-between gap-2 border-b border-zinc-800 px-6 py-4">
-        <div className="flex items-center gap-2">
-          <Dumbbell className="h-5 w-5 text-zinc-300" />
-          <h2 className="text-lg font-semibold tracking-tight text-zinc-100">
-            Your Stats
-          </h2>
-        </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={handleReset}
-          className="h-7 px-2 text-xs text-zinc-400 hover:text-zinc-100"
+    <div className="flex h-full max-h-full flex-col bg-terminal-black">
+      <header className="flex items-center justify-between gap-2 border-b border-terminal-border px-4 py-3">
+        <span
+          className="text-[12px] font-bold text-terminal-amber"
+          style={{ letterSpacing: '0.15em' }}
         >
-          <RotateCcw className="mr-1 h-3 w-3" />
-          Reset
-        </Button>
+          STATS // LIFTER_PROFILE
+        </span>
+        <button
+          type="button"
+          onClick={handleReset}
+          className="text-[11px] font-medium uppercase text-terminal-text-dim transition-colors hover:text-terminal-amber"
+          style={{ letterSpacing: '0.1em' }}
+        >
+          [RESET]
+        </button>
       </header>
 
-      <p className="px-6 pt-3 pb-1 text-xs text-zinc-500">
-        Filled in here, used in every message. Stored locally on this device.
+      <p
+        className="px-4 pt-2 pb-3 text-[10px] uppercase text-terminal-text-faint"
+        style={{ letterSpacing: '0.1em' }}
+      >
+        Filled here, used in every message. Stored locally.
       </p>
 
-      <div className="flex flex-1 flex-col gap-3 overflow-y-auto px-4 py-3">
-        <Section title="Essentials" defaultOpen>
-          <Field label="Gender">
+      <div className="flex flex-1 flex-col gap-2 overflow-y-auto px-3 pb-4">
+        <Section title="ESSENTIALS" defaultOpen>
+          <Field label="GENDER">
             <SegmentedButtons<Gender>
               value={lifterState.gender}
               options={[
@@ -274,7 +298,7 @@ export function StatsSidebar({
             />
           </Field>
 
-          <Field label="Age (years)">
+          <Field label="AGE (YEARS)">
             <NumberInput
               value={lifterState.ageYears}
               onValueChange={(n) => {
@@ -286,7 +310,7 @@ export function StatsSidebar({
             />
           </Field>
 
-          <Field label={`Height (${heightUnit})`}>
+          <Field label={`HEIGHT (${heightUnit.toUpperCase()})`}>
             <div className="flex items-center gap-2">
               <NumberInput
                 value={heightToDisplay(lifterState.heightCm, heightUnit)}
@@ -306,7 +330,7 @@ export function StatsSidebar({
             </div>
           </Field>
 
-          <Field label={`Bodyweight (${weightUnit})`}>
+          <Field label={`BODYWEIGHT (${weightUnit.toUpperCase()})`}>
             <div className="flex items-center gap-2">
               <NumberInput
                 value={weightToDisplay(lifterState.bodyweightKg, weightUnit)}
@@ -326,22 +350,22 @@ export function StatsSidebar({
             </div>
           </Field>
 
-          <Field label="Phase">
+          <Field label="PHASE">
             <SegmentedButtons<Phase>
               value={lifterState.phase}
               options={[
                 { value: 'cut', label: 'Cut' },
-                { value: 'maintenance', label: 'Maintenance' },
+                { value: 'maintenance', label: 'Maint' },
                 { value: 'bulk', label: 'Bulk' },
-                { value: 'peak_week', label: 'Peak Week' },
+                { value: 'peak_week', label: 'Peak' },
               ]}
               onSelect={(p) => update('phase', p)}
             />
           </Field>
         </Section>
 
-        <Section title="Detail">
-          <Field label="Body fat %" hint="optional — improves protein math">
+        <Section title="DETAIL">
+          <Field label="BODY FAT %" hint="optional — improves protein math">
             <NumberInput
               value={lifterState.bodyFatPercent}
               onValueChange={(v) => update('bodyFatPercent', v)}
@@ -352,25 +376,26 @@ export function StatsSidebar({
           </Field>
 
           <Field
-            label="Show date"
+            label="SHOW DATE"
             hint={
-              showDateEnabled
-                ? undefined
-                : 'available when phase is Cut or Peak Week'
+              showDateEnabled ? undefined : 'enabled when phase is Cut or Peak'
             }
           >
-            <Input
+            <input
               type="date"
               disabled={!showDateEnabled}
               value={lifterState.showDateISO ?? ''}
               onChange={(e) =>
                 update('showDateISO', e.target.value === '' ? null : e.target.value)
               }
-              className="bg-zinc-900/40"
+              className={inputBase}
             />
           </Field>
 
-          <Field label={`Target stage weight (${weightUnit})`} hint="optional">
+          <Field
+            label={`TARGET STAGE WEIGHT (${weightUnit.toUpperCase()})`}
+            hint="optional"
+          >
             <NumberInput
               value={weightToDisplay(lifterState.targetStageWeightKg, weightUnit)}
               onValueChange={(v) =>
@@ -384,7 +409,7 @@ export function StatsSidebar({
           </Field>
 
           <Field
-            label={`Recent weekly weight change (${weightUnit}/wk)`}
+            label={`WEEKLY WT CHANGE (${weightUnit.toUpperCase()}/WK)`}
             hint="negative = losing"
           >
             <NumberInput
@@ -402,7 +427,7 @@ export function StatsSidebar({
             />
           </Field>
 
-          <Field label="Sessions per week">
+          <Field label="SESSIONS / WEEK">
             <NumberInput
               value={lifterState.sessionsPerWeek}
               onValueChange={(v) => update('sessionsPerWeek', v)}
@@ -412,29 +437,24 @@ export function StatsSidebar({
             />
           </Field>
 
-          <Field label="Training split">
-            <Select
-              value={lifterState.trainingSplit ?? undefined}
-              onValueChange={(v) =>
-                update('trainingSplit', v as TrainingSplit)
-              }
-            >
-              <SelectTrigger className="w-full bg-zinc-900/40">
-                <SelectValue placeholder="Select a split" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="PPL">Push / Pull / Legs</SelectItem>
-                <SelectItem value="upper_lower">Upper / Lower</SelectItem>
-                <SelectItem value="bro_split">Bro Split</SelectItem>
-                <SelectItem value="full_body">Full Body</SelectItem>
-                <SelectItem value="other">Other</SelectItem>
-              </SelectContent>
-            </Select>
+          <Field label="TRAINING SPLIT">
+            <TerminalSelect<TrainingSplit>
+              value={lifterState.trainingSplit}
+              placeholder="-- select --"
+              options={[
+                { value: 'PPL', label: 'Push / Pull / Legs' },
+                { value: 'upper_lower', label: 'Upper / Lower' },
+                { value: 'bro_split', label: 'Bro Split' },
+                { value: 'full_body', label: 'Full Body' },
+                { value: 'other', label: 'Other' },
+              ]}
+              onChange={(v) => update('trainingSplit', v)}
+            />
           </Field>
         </Section>
 
-        <Section title="Nutrition + Wellbeing">
-          <Field label="Daily calories (kcal)">
+        <Section title="NUTRITION_WELLBEING">
+          <Field label="DAILY CALORIES (KCAL)">
             <NumberInput
               value={lifterState.dailyCalories}
               onValueChange={(v) => update('dailyCalories', v)}
@@ -442,7 +462,7 @@ export function StatsSidebar({
               step={50}
             />
           </Field>
-          <Field label="Daily protein (g)">
+          <Field label="DAILY PROTEIN (G)">
             <NumberInput
               value={lifterState.dailyProteinG}
               onValueChange={(v) => update('dailyProteinG', v)}
@@ -450,7 +470,7 @@ export function StatsSidebar({
               step={5}
             />
           </Field>
-          <Field label="Daily carbs (g)">
+          <Field label="DAILY CARBS (G)">
             <NumberInput
               value={lifterState.dailyCarbsG}
               onValueChange={(v) => update('dailyCarbsG', v)}
@@ -458,7 +478,7 @@ export function StatsSidebar({
               step={5}
             />
           </Field>
-          <Field label="Daily fat (g)">
+          <Field label="DAILY FAT (G)">
             <NumberInput
               value={lifterState.dailyFatG}
               onValueChange={(v) => update('dailyFatG', v)}
@@ -466,14 +486,16 @@ export function StatsSidebar({
               step={5}
             />
           </Field>
-
-          <SliderField
-            label="Energy"
-            value={lifterState.energy1to10}
-            onValueChange={(v) => update('energy1to10', v)}
-          />
-
-          <Field label="Sleep hours">
+          <Field label="ENERGY (1-10)">
+            <NumberInput
+              value={lifterState.energy1to10}
+              onValueChange={(v) => update('energy1to10', v)}
+              min={1}
+              max={10}
+              step={1}
+            />
+          </Field>
+          <Field label="SLEEP HOURS">
             <NumberInput
               value={lifterState.sleepHours}
               onValueChange={(v) => update('sleepHours', v)}
@@ -482,35 +504,30 @@ export function StatsSidebar({
               step={0.25}
             />
           </Field>
-
-          <SliderField
-            label="Stress level"
-            value={lifterState.stressLevel1to10}
-            onValueChange={(v) => update('stressLevel1to10', v)}
-          />
+          <Field label="STRESS LEVEL (1-10)">
+            <NumberInput
+              value={lifterState.stressLevel1to10}
+              onValueChange={(v) => update('stressLevel1to10', v)}
+              min={1}
+              max={10}
+              step={1}
+            />
+          </Field>
 
           {lifterState.gender === 'female' && (
-            <Field label="Menstrual cycle phase">
-              <Select
-                value={lifterState.menstrualCyclePhase ?? undefined}
-                onValueChange={(v) =>
-                  update(
-                    'menstrualCyclePhase',
-                    v as LifterState['menstrualCyclePhase'],
-                  )
-                }
-              >
-                <SelectTrigger className="w-full bg-zinc-900/40">
-                  <SelectValue placeholder="Select phase" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="follicular">Follicular</SelectItem>
-                  <SelectItem value="ovulation">Ovulation</SelectItem>
-                  <SelectItem value="luteal">Luteal</SelectItem>
-                  <SelectItem value="menstrual">Menstrual</SelectItem>
-                  <SelectItem value="irregular">Irregular</SelectItem>
-                </SelectContent>
-              </Select>
+            <Field label="MENSTRUAL CYCLE PHASE">
+              <TerminalSelect<NonNullable<LifterState['menstrualCyclePhase']>>
+                value={lifterState.menstrualCyclePhase}
+                placeholder="-- select --"
+                options={[
+                  { value: 'follicular', label: 'Follicular' },
+                  { value: 'ovulation', label: 'Ovulation' },
+                  { value: 'luteal', label: 'Luteal' },
+                  { value: 'menstrual', label: 'Menstrual' },
+                  { value: 'irregular', label: 'Irregular' },
+                ]}
+                onChange={(v) => update('menstrualCyclePhase', v)}
+              />
             </Field>
           )}
         </Section>

@@ -1,19 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  AlertCircle,
-  Check,
-  Loader2,
-  SendHorizonal,
-  Square,
-  X,
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { streamChat } from '@/lib/chat-client';
 import type { LifterState } from '@/lib/types';
+import { cn } from '@/lib/utils';
 
 type ToolStatus = 'running' | 'done' | 'error';
 
@@ -27,75 +17,109 @@ interface ChatMessage {
   id: string;
   role: 'user' | 'assistant' | 'error';
   content: string;
+  pendingBuffer?: string;       // assistant only: chars waiting to be drained
+  isApiStreaming?: boolean;     // assistant only: true while API is still streaming
   toolCalls?: ToolCall[];
+  createdAt: number;
 }
 
-const TOOL_LABELS: Record<string, string> = {
-  project_weight_trajectory: 'Projecting weight trajectory',
-  assess_macros: 'Assessing macros',
-  generate_peak_week: 'Generating peak week protocol',
-  flag_warning_signs: 'Checking warning signs',
+function fmtTime(ts: number): string {
+  const d = new Date(ts);
+  const h = String(d.getUTCHours()).padStart(2, '0');
+  const m = String(d.getUTCMinutes()).padStart(2, '0');
+  const s = String(d.getUTCSeconds()).padStart(2, '0');
+  return `${h}:${m}:${s} UTC`;
+}
+
+const STATUS_LABEL: Record<ToolStatus, string> = {
+  running: 'RUNNING',
+  done: 'DONE',
+  error: 'ERROR',
 };
 
-function humanizeTool(name: string): string {
-  return TOOL_LABELS[name] ?? name;
-}
-
-function ToolPill({ call }: { call: ToolCall }) {
-  const label = humanizeTool(call.name);
+function ToolStatusRow({ call }: { call: ToolCall }) {
+  const colorCls =
+    call.status === 'running'
+      ? 'text-terminal-amber'
+      : call.status === 'done'
+        ? 'text-terminal-green'
+        : 'text-terminal-red';
   return (
-    <span
-      title={call.status === 'error' ? 'Tool execution failed' : label}
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs ${
-        call.status === 'running'
-          ? 'border-zinc-700 bg-zinc-900 text-zinc-300'
-          : call.status === 'done'
-            ? 'border-emerald-900/60 bg-emerald-950/40 text-emerald-300'
-            : 'border-red-900/60 bg-red-950/40 text-red-300'
-      }`}
-    >
-      {call.status === 'running' && <Loader2 className="h-3 w-3 animate-spin" />}
-      {call.status === 'done' && <Check className="h-3 w-3" />}
-      {call.status === 'error' && <X className="h-3 w-3" />}
-      <span>
-        {label}
-        {call.status === 'running' ? '…' : ''}
+    <div className="flex items-baseline gap-2 py-0.5 text-[11px]">
+      <span className="text-terminal-text-dim">
+        [TOOL]{' '}
+        <span className="text-terminal-text">{call.name}</span>
       </span>
-    </span>
+      <span
+        className="flex-1 self-center border-b border-dotted border-terminal-text-faint"
+        aria-hidden="true"
+      />
+      <span className={cn('inline-flex items-center gap-1', colorCls)}>
+        {call.status === 'running' && (
+          <span className="terminal-blink">▮</span>
+        )}
+        {STATUS_LABEL[call.status]}
+      </span>
+    </div>
   );
 }
 
-function MessageBubble({ message }: { message: ChatMessage }) {
-  if (message.role === 'user') {
+function MessageBlock({
+  message,
+  showStreamingCursor,
+}: {
+  message: ChatMessage;
+  showStreamingCursor: boolean;
+}) {
+  if (message.role === 'error') {
     return (
-      <div className="flex justify-end">
-        <div className="max-w-[80%] rounded-2xl bg-zinc-800 px-4 py-2.5 text-sm text-zinc-100">
+      <div className="border-t border-terminal-border pt-3">
+        <div
+          className="mb-1 text-[10px] font-bold text-terminal-red"
+          style={{ letterSpacing: '0.1em' }}
+        >
+          [ERROR] {fmtTime(message.createdAt)}
+        </div>
+        <div className="text-[13px] text-terminal-text-dim">
           {message.content}
         </div>
       </div>
     );
   }
-  if (message.role === 'error') {
-    return (
-      <div className="flex items-start gap-2 rounded-md border border-red-900/60 bg-red-950/30 px-3 py-2 text-sm text-red-300">
-        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-        <span>{message.content}</span>
-      </div>
-    );
-  }
+
+  const isUser = message.role === 'user';
+  const prefix = isUser ? 'USER' : 'AGENT';
+
   return (
-    <div className="flex flex-col gap-2">
+    <div className="border-t border-terminal-border pt-3">
+      <div
+        className="mb-1.5 text-[10px] font-bold text-terminal-amber"
+        style={{ letterSpacing: '0.1em' }}
+      >
+        {prefix} &gt; {fmtTime(message.createdAt)}
+      </div>
+
       {message.toolCalls && message.toolCalls.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
+        <div className="mb-2 flex flex-col gap-0">
           {message.toolCalls.map((tc) => (
-            <ToolPill key={tc.id} call={tc} />
+            <ToolStatusRow key={tc.id} call={tc} />
           ))}
         </div>
       )}
-      {message.content && (
-        <div className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-200">
+
+      {message.content ? (
+        <div className="whitespace-pre-wrap text-[13px] leading-relaxed text-terminal-text">
           {message.content}
+          {showStreamingCursor && (
+            <span className="terminal-blink ml-1 text-terminal-amber">●</span>
+          )}
         </div>
+      ) : (
+        showStreamingCursor && (
+          <div className="text-[13px] leading-relaxed text-terminal-text">
+            <span className="terminal-blink text-terminal-amber">●</span>
+          </div>
+        )
       )}
     </div>
   );
@@ -114,6 +138,63 @@ export function ChatPanel({
   const scrollEndRef = useRef<HTMLDivElement | null>(null);
   const streamingAssistantIdRef = useRef<string | null>(null);
 
+  /* ---------- typewriter drain loop ---------- */
+  useEffect(() => {
+    let rafId: number | null = null;
+    let lastTime = performance.now();
+    let accumulator = 0;
+
+    function tick(now: number) {
+      const elapsed = now - lastTime;
+      lastTime = now;
+
+      setMessages((prev) => {
+        const last = prev[prev.length - 1];
+        if (
+          !last ||
+          last.role !== 'assistant' ||
+          !last.pendingBuffer ||
+          last.pendingBuffer.length === 0
+        ) {
+          accumulator = 0;
+          return prev;
+        }
+
+        const bufferLen = last.pendingBuffer.length;
+        let rate: number;
+        if (!last.isApiStreaming) rate = 600;
+        else if (bufferLen > 500) rate = 400;
+        else if (bufferLen > 200) rate = 150;
+        else rate = 70;
+
+        accumulator += (elapsed * rate) / 1000;
+        const charsToAdd = Math.floor(accumulator);
+        if (charsToAdd <= 0) return prev;
+        accumulator -= charsToAdd;
+
+        const take = Math.min(charsToAdd, bufferLen);
+        const newContent = last.content + last.pendingBuffer.slice(0, take);
+        const newBuffer = last.pendingBuffer.slice(take);
+
+        const updated = [...prev];
+        updated[updated.length - 1] = {
+          ...last,
+          content: newContent,
+          pendingBuffer: newBuffer,
+        };
+        return updated;
+      });
+
+      rafId = requestAnimationFrame(tick);
+    }
+
+    rafId = requestAnimationFrame(tick);
+    return () => {
+      if (rafId !== null) cancelAnimationFrame(rafId);
+    };
+  }, []);
+
+  /* ---------- effects ---------- */
   useEffect(() => {
     scrollEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [messages]);
@@ -122,23 +203,33 @@ export function ChatPanel({
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = 'auto';
-    const lineHeight = 24; // matches text-sm leading
-    const maxHeight = lineHeight * 6 + 16;
+    const lineHeight = 20;
+    const maxHeight = lineHeight * 6 + 8;
     el.style.height = `${Math.min(el.scrollHeight, maxHeight)}px`;
   }, [input]);
 
+  /* ---------- helpers ---------- */
   const ensureAssistantMessage = useCallback(
     (mutator: (msg: ChatMessage) => ChatMessage) => {
       setMessages((prev) => {
         const last = prev[prev.length - 1];
-        if (last && last.role === 'assistant' && last.id === streamingAssistantIdRef.current) {
+        if (
+          last &&
+          last.role === 'assistant' &&
+          last.id === streamingAssistantIdRef.current
+        ) {
           return [...prev.slice(0, -1), mutator(last)];
         }
         const fresh: ChatMessage = {
-          id: streamingAssistantIdRef.current ?? `a-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          id:
+            streamingAssistantIdRef.current ??
+            `a-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           role: 'assistant',
           content: '',
+          pendingBuffer: '',
+          isApiStreaming: true,
           toolCalls: [],
+          createdAt: Date.now(),
         };
         return [...prev, mutator(fresh)];
       });
@@ -154,6 +245,7 @@ export function ChatPanel({
       id: `u-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       role: 'user',
       content: trimmed,
+      createdAt: Date.now(),
     };
     const updatedMessages = [...messages, userMessage];
     setMessages(updatedMessages);
@@ -166,7 +258,6 @@ export function ChatPanel({
     const controller = new AbortController();
     abortRef.current = controller;
 
-    // Pass to the server: drop UI-only error rows; convert to {role, content}
     const transportMessages = updatedMessages
       .filter((m) => m.role !== 'error')
       .map((m) => ({
@@ -181,7 +272,8 @@ export function ChatPanel({
         onTextDelta: (text) => {
           ensureAssistantMessage((msg) => ({
             ...msg,
-            content: msg.content + text,
+            pendingBuffer: (msg.pendingBuffer ?? '') + text,
+            isApiStreaming: true,
           }));
         },
         onToolCallStart: (toolName, toolUseId) => {
@@ -210,12 +302,23 @@ export function ChatPanel({
               id: `e-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
               role: 'error',
               content: message,
+              createdAt: Date.now(),
             },
           ]);
         },
         onDone: () => {
           setIsStreaming(false);
           abortRef.current = null;
+          // Mark API stream done. The typewriter loop will drain the
+          // remaining buffer at the fast (600 c/s) rate.
+          setMessages((prev) => {
+            const last = prev[prev.length - 1];
+            if (!last || last.role !== 'assistant') return prev;
+            return [
+              ...prev.slice(0, -1),
+              { ...last, isApiStreaming: false },
+            ];
+          });
           streamingAssistantIdRef.current = null;
         },
       },
@@ -225,6 +328,16 @@ export function ChatPanel({
 
   const handleStop = useCallback(() => {
     abortRef.current?.abort();
+    // Immediately drop the pending buffer so the typewriter doesn't keep
+    // typing out aborted text.
+    setMessages((prev) => {
+      const last = prev[prev.length - 1];
+      if (!last || last.role !== 'assistant') return prev;
+      return [
+        ...prev.slice(0, -1),
+        { ...last, pendingBuffer: '', isApiStreaming: false },
+      ];
+    });
   }, []);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -234,66 +347,117 @@ export function ChatPanel({
     }
   };
 
+  const lastMessage = messages[messages.length - 1];
+  const cursorVisible =
+    lastMessage?.role === 'assistant' &&
+    lastMessage.id === streamingAssistantIdRef.current
+      ? true
+      : lastMessage?.role === 'assistant' &&
+          ((lastMessage.pendingBuffer && lastMessage.pendingBuffer.length > 0) ||
+            lastMessage.isApiStreaming === true);
+
   return (
-    <section className="flex h-full min-h-0 flex-1 flex-col bg-zinc-950">
-      <header className="border-b border-zinc-800 px-6 py-4">
-        <h1 className="text-lg font-semibold tracking-tight text-zinc-100">
-          PhysiqueAI
-        </h1>
-        <p className="mt-1 text-sm text-zinc-400">
-          applied AI for contest prep, grounded in evidence-based bodybuilding research.
-        </p>
+    <section className="flex h-full min-h-0 flex-1 flex-col bg-terminal-black">
+      <header className="border-b border-terminal-border px-4 py-3">
+        <div
+          className="text-[12px] font-bold text-terminal-amber"
+          style={{ letterSpacing: '0.15em' }}
+        >
+          &gt; TERMINAL // EVIDENCE_BASED_AGENT
+        </div>
+        <div
+          className={cn(
+            'mt-1 text-[10px] uppercase',
+            isStreaming
+              ? 'text-terminal-amber'
+              : 'text-terminal-text-dim',
+          )}
+          style={{ letterSpacing: '0.15em' }}
+        >
+          {isStreaming ? (
+            <>
+              PROCESSING<span className="terminal-blink">...</span>
+            </>
+          ) : (
+            'READY. AWAITING INPUT.'
+          )}
+        </div>
       </header>
 
-      <ScrollArea className="flex-1">
-        <div className="mx-auto flex max-w-3xl flex-col gap-4 px-6 py-6">
+      <div className="flex-1 overflow-y-auto">
+        <div className="mx-auto flex max-w-3xl flex-col gap-0 px-6 py-6">
           {messages.length === 0 ? (
-            <div className="mt-12 text-center text-sm text-zinc-500">
-              Ask anything about your cut, your macros, peak week timing, or warning signs.
-              <br />
-              I&apos;ll use evidence-based tools to answer.
-            </div>
+            <pre
+              className="m-0 whitespace-pre font-mono text-[13px] leading-[1.6] text-terminal-text-dim"
+              style={{ letterSpacing: '0.02em' }}
+            >
+              <span className="text-terminal-amber-dim">{'>'}</span> NO_MESSAGES
+              {'\n'}
+              <span className="text-terminal-amber-dim">{'>'}</span>
+              {'\n'}
+              <span className="text-terminal-amber-dim">{'>'}</span> AWAITING USER INPUT...
+              {'\n'}
+              <span className="text-terminal-amber-dim">{'>'}</span>
+              {'\n'}
+              <span className="text-terminal-amber-dim">{'>'}</span> TIP: FILL STATS PANEL FOR FULL CONTEXT
+            </pre>
           ) : (
-            messages.map((m) => <MessageBubble key={m.id} message={m} />)
+            messages.map((m, i) => (
+              <MessageBlock
+                key={m.id}
+                message={m}
+                showStreamingCursor={
+                  i === messages.length - 1 && Boolean(cursorVisible)
+                }
+              />
+            ))
           )}
           <div ref={scrollEndRef} />
         </div>
-      </ScrollArea>
+      </div>
 
-      <div className="border-t border-zinc-800 p-4">
-        <div className="mx-auto flex max-w-3xl items-end gap-2">
-          <Textarea
+      <div className="border-t border-terminal-border bg-terminal-bg-elevated px-4 py-3">
+        <div className="mx-auto flex max-w-3xl items-end gap-3">
+          <textarea
             ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask about macros, weight trajectory, peak week, or warning signs…"
+            placeholder="> ENTER QUERY..."
             rows={1}
-            className="min-h-[44px] flex-1 resize-none border-zinc-800 bg-zinc-900/40 text-zinc-100 placeholder:text-zinc-500"
+            className="min-h-[24px] flex-1 resize-none border-none bg-transparent text-[13px] text-terminal-text placeholder:text-terminal-text-faint focus:outline-none"
           />
           {isStreaming ? (
-            <Button
+            <button
               type="button"
               onClick={handleStop}
-              size="icon"
-              variant="secondary"
-              className="h-11 w-11 shrink-0"
-              aria-label="Stop"
+              className="text-[11px] font-bold uppercase text-terminal-red transition-colors hover:brightness-125"
+              style={{ letterSpacing: '0.15em' }}
             >
-              <Square className="h-4 w-4" />
-            </Button>
+              [STOP]
+            </button>
           ) : (
-            <Button
+            <button
               type="button"
               onClick={handleSend}
               disabled={!input.trim()}
-              size="icon"
-              className="h-11 w-11 shrink-0"
-              aria-label="Send"
+              className={cn(
+                'text-[11px] font-bold uppercase transition-colors',
+                input.trim()
+                  ? 'text-terminal-amber hover:brightness-125'
+                  : 'cursor-not-allowed text-terminal-text-faint',
+              )}
+              style={{ letterSpacing: '0.15em' }}
             >
-              <SendHorizonal className="h-4 w-4" />
-            </Button>
+              [SEND]
+            </button>
           )}
+          <span
+            className="text-[10px] text-terminal-text-faint"
+            style={{ letterSpacing: '0.1em' }}
+          >
+            ^ENTER
+          </span>
         </div>
       </div>
     </section>

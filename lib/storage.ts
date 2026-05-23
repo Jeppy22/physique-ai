@@ -32,3 +32,11 @@ export function clearLifterState(): void {
     // ignore
   }
 }
+
+export function hasAnyData(state: LifterState): boolean {
+  const keys = Object.keys(DEFAULT_LIFTER_STATE) as (keyof LifterState)[];
+  for (const k of keys) {
+    if (state[k] !== DEFAULT_LIFTER_STATE[k]) return true;
+  }
+  return false;
+}
