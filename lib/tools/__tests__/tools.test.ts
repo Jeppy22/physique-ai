@@ -6,6 +6,7 @@ import {
   flagWarningSigns,
   analyzePhysique,
 } from '../index';
+import { POSE_MUSCLE_GROUPS } from '../analyze-physique';
 
 describe('projectWeightTrajectory', () => {
   it('80kg lifter losing 0.4kg/week reaches 76kg in 10 weeks — on_track, all weeks safe', () => {
@@ -337,7 +338,7 @@ describe('flagWarningSigns', () => {
 });
 
 describe('analyzePhysique', () => {
-  it('male input with all three poses → rubric contains all six required sections', () => {
+  it('male input with all three poses → rubric contains all seven required sections', () => {
     const out = analyzePhysique({
       lifterContext: {
         gender: 'male',
@@ -356,7 +357,8 @@ describe('analyzePhysique', () => {
     expect(sections).toContain('SYMMETRY');
     expect(sections).toContain('POSING_QUALITY');
     expect(sections).toContain('STAGE_READINESS_CONTEXT');
-    expect(out.assessmentRubric.requiredSections.length).toBe(6);
+    expect(sections).toContain('MUSCLE_GROUP_RATINGS');
+    expect(out.assessmentRubric.requiredSections.length).toBe(7);
     expect(out.citations.length).toBeGreaterThan(0);
   });
 
@@ -372,7 +374,7 @@ describe('analyzePhysique', () => {
       posesProvided: ['front'],
       userQuestion: 'Quick check on my front double bi.',
     });
-    expect(out.assessmentRubric.requiredSections.length).toBe(6);
+    expect(out.assessmentRubric.requiredSections.length).toBe(7);
     expect(out.assessmentRubric.forbiddenClaims.length).toBeGreaterThan(0);
     expect(out.assessmentRubric.voiceGuidance).toMatch(/qualified prep coach/i);
   });
@@ -450,6 +452,70 @@ describe('analyzePhysique', () => {
     expect(
       result.assessmentRubric.requiredSections.some((s) =>
         s.includes('LOWER_BODY_DEVELOPMENT'),
+      ),
+    ).toBe(true);
+  });
+
+  it('expectedMuscleGroups unions correctly across multiple poses', () => {
+    const result = analyzePhysique({
+      lifterContext: {
+        gender: 'male',
+        phase: 'cut',
+        weeksOutFromShow: 12,
+        bodyweightKg: 80,
+        statedBodyFatPercent: 12,
+      },
+      posesProvided: ['front', 'legs'],
+      userQuestion: 'how am I looking?',
+    });
+    expect(result.expectedMuscleGroups).toContain('quads');
+    expect(result.expectedMuscleGroups).toContain('chest');
+    expect(result.expectedMuscleGroups).toContain('calves');
+    // No duplicates (front + legs both list quads).
+    expect(new Set(result.expectedMuscleGroups).size).toBe(
+      result.expectedMuscleGroups.length,
+    );
+    // Sanity check the pose mapping itself.
+    expect(POSE_MUSCLE_GROUPS.front).toContain('quads');
+    expect(POSE_MUSCLE_GROUPS.legs).toContain('quads');
+  });
+
+  it('rubric includes MUSCLE_GROUP_RATINGS section and ratingInstructions', () => {
+    const result = analyzePhysique({
+      lifterContext: {
+        gender: 'male',
+        phase: 'cut',
+        weeksOutFromShow: 12,
+        bodyweightKg: 80,
+        statedBodyFatPercent: 12,
+      },
+      posesProvided: ['front'],
+      userQuestion: 'how am I looking?',
+    });
+    expect(
+      result.assessmentRubric.requiredSections.some((s) =>
+        s.includes('MUSCLE_GROUP_RATINGS'),
+      ),
+    ).toBe(true);
+    expect(result.assessmentRubric.ratingInstructions).toContain('NEEDS_WORK');
+    expect(result.assessmentRubric.ratingInstructions).toContain('STAGE_READY');
+  });
+
+  it('forbiddenClaims includes the no-numerical-scores rule', () => {
+    const result = analyzePhysique({
+      lifterContext: {
+        gender: 'male',
+        phase: 'cut',
+        weeksOutFromShow: 12,
+        bodyweightKg: 80,
+        statedBodyFatPercent: 12,
+      },
+      posesProvided: ['front'],
+      userQuestion: 'how am I looking?',
+    });
+    expect(
+      result.assessmentRubric.forbiddenClaims.some((c) =>
+        c.toLowerCase().includes('numerical'),
       ),
     ).toBe(true);
   });

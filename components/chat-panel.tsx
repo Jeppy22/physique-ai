@@ -5,6 +5,8 @@ import { streamChat } from '@/lib/chat-client';
 import type { LifterState, PhysiquePhoto } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { PhotoUploadPanel } from '@/components/photo-upload-panel';
+import { MuscleRatingsTable } from '@/components/muscle-ratings-table';
+import { parseAssistantContent } from '@/lib/parse-ratings';
 
 type ToolStatus = 'running' | 'done' | 'error';
 
@@ -92,6 +94,15 @@ function MessageBlock({
   const isUser = message.role === 'user';
   const prefix = isUser ? 'USER' : 'AGENT';
 
+  const isAssistantDone =
+    message.role === 'assistant' &&
+    !message.isApiStreaming &&
+    (!message.pendingBuffer || message.pendingBuffer.length === 0);
+  const parsed = isAssistantDone
+    ? parseAssistantContent(message.content)
+    : null;
+  const displayContent = parsed ? parsed.prose : message.content;
+
   return (
     <div className="border-t border-terminal-border pt-3">
       <div
@@ -130,9 +141,9 @@ function MessageBlock({
         </div>
       )}
 
-      {message.content ? (
+      {displayContent ? (
         <div className="whitespace-pre-wrap text-[13px] leading-relaxed text-terminal-text">
-          {message.content}
+          {displayContent}
           {showStreamingCursor && (
             <span className="terminal-blink ml-1 text-terminal-amber">●</span>
           )}
@@ -143,6 +154,10 @@ function MessageBlock({
             <span className="terminal-blink text-terminal-amber">●</span>
           </div>
         )
+      )}
+
+      {parsed?.ratings && parsed.ratings.length > 0 && (
+        <MuscleRatingsTable ratings={parsed.ratings} />
       )}
     </div>
   );

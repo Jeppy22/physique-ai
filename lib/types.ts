@@ -17,6 +17,37 @@ export interface PhysiquePhoto {
   sizeBytes: number;
 }
 
+export type MuscleRating =
+  | 'NEEDS_WORK'
+  | 'DEVELOPING'
+  | 'SOLID'
+  | 'STRONG'
+  | 'STAGE_READY';
+
+export type MuscleGroup =
+  // upper body
+  | 'chest'
+  | 'shoulders'
+  | 'arms'
+  | 'abs'
+  | 'lats'
+  | 'back_thickness'
+  | 'rear_delts'
+  | 'triceps'
+  | 'chest_depth'
+  | 'shoulder_cap'
+  // lower body
+  | 'quads'
+  | 'hamstrings'
+  | 'glutes'
+  | 'calves';
+
+export interface MuscleGroupAssessment {
+  group: MuscleGroup;
+  rating: MuscleRating;
+  note: string; // one-line specific observation, ~120 chars
+}
+
 export interface LifterState {
   // Demographics
   gender: Gender;
