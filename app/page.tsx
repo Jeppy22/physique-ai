@@ -3,14 +3,17 @@
 import { useEffect, useState } from 'react';
 import { ChatPanel } from '@/components/chat-panel';
 import { StatsBar } from '@/components/stats-bar';
+import { OnboardingWizard } from '@/components/onboarding-wizard';
+import { TypewriterText } from '@/components/typewriter-text';
 import {
-  clearLifterState,
   hasAnyData,
   loadLifterState,
   saveLifterState,
 } from '@/lib/storage';
 import { DEFAULT_LIFTER_STATE } from '@/lib/types';
 import type { LifterState } from '@/lib/types';
+
+const HEADER_TYPED_FLAG = 'physique-ai-header-typed';
 
 function formatUTC(d: Date): string {
   const h = String(d.getUTCHours()).padStart(2, '0');
@@ -32,10 +35,12 @@ function TerminalTopBar({
   hydrated,
   sessionId,
   clock,
+  typeHeader,
 }: {
   hydrated: boolean;
   sessionId: string;
   clock: string;
+  typeHeader: boolean;
 }) {
   return (
     <div className="flex h-8 w-full flex-shrink-0 items-center justify-between border-b border-terminal-border bg-terminal-bg-deep px-4 text-[12px]">
@@ -43,7 +48,15 @@ function TerminalTopBar({
         className="font-bold text-terminal-amber"
         style={{ letterSpacing: '0.15em' }}
       >
-        PHYSIQUE_AI
+        {hydrated ? (
+          <TypewriterText
+            text="PHYSIQUE_AI"
+            animate={typeHeader}
+            charDelayMs={50}
+          />
+        ) : (
+          'PHYSIQUE_AI'
+        )}
       </span>
       <span
         className="hidden text-[11px] text-terminal-text-dim sm:inline"
@@ -83,16 +96,28 @@ function StatsBarLoadingShell() {
 export default function Home() {
   const [lifterState, setLifterState] = useState<LifterState>(DEFAULT_LIFTER_STATE);
   const [hydrated, setHydrated] = useState(false);
-  const [initiallyExpanded, setInitiallyExpanded] = useState(false);
+  const [typeHeader, setTypeHeader] = useState(false);
+  const [isEditingStats, setIsEditingStats] = useState(false);
   const [sessionId, setSessionId] = useState<string>('');
   const [clock, setClock] = useState<string>('');
 
   useEffect(() => {
     const loaded = loadLifterState();
     setLifterState(loaded);
-    setInitiallyExpanded(!hasAnyData(loaded));
     setSessionId(genSessionId());
     setClock(formatUTC(new Date()));
+
+    // Once-per-session header typewriter.
+    try {
+      const already = window.sessionStorage.getItem(HEADER_TYPED_FLAG);
+      if (!already) {
+        setTypeHeader(true);
+        window.sessionStorage.setItem(HEADER_TYPED_FLAG, '1');
+      }
+    } catch {
+      // sessionStorage unavailable — don't animate
+    }
+
     setHydrated(true);
     const id = setInterval(() => setClock(formatUTC(new Date())), 1000);
     return () => clearInterval(id);
@@ -104,20 +129,22 @@ export default function Home() {
     return () => clearTimeout(t);
   }, [lifterState, hydrated]);
 
-  function handleReset() {
-    clearLifterState();
-    setLifterState(DEFAULT_LIFTER_STATE);
-  }
+  const populated = hasAnyData(lifterState);
+  const showWizard = hydrated && (!populated || isEditingStats);
+  const wizardMode: 'first-visit' | 'edit' = populated ? 'edit' : 'first-visit';
 
   return (
     <main className="flex h-screen min-h-screen w-screen flex-col bg-terminal-black text-terminal-text">
-      <TerminalTopBar hydrated={hydrated} sessionId={sessionId} clock={clock} />
+      <TerminalTopBar
+        hydrated={hydrated}
+        sessionId={sessionId}
+        clock={clock}
+        typeHeader={typeHeader}
+      />
       {hydrated ? (
         <StatsBar
           lifterState={lifterState}
-          onChange={setLifterState}
-          onReset={handleReset}
-          initiallyExpanded={initiallyExpanded}
+          onEdit={() => setIsEditingStats(true)}
         />
       ) : (
         <StatsBarLoadingShell />
@@ -125,6 +152,22 @@ export default function Home() {
       <section className="flex min-h-0 flex-1 flex-col">
         <ChatPanel lifterState={hydrated ? lifterState : null} />
       </section>
+
+      {showWizard && (
+        <OnboardingWizard
+          initialState={lifterState}
+          mode={wizardMode}
+          onComplete={(next) => {
+            setLifterState(next);
+            setIsEditingStats(false);
+          }}
+          onCancel={
+            wizardMode === 'edit'
+              ? () => setIsEditingStats(false)
+              : undefined
+          }
+        />
+      )}
     </main>
   );
 }
