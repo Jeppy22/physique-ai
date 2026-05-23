@@ -114,17 +114,18 @@ npm run build     # production build
 
 ## Vision (opt-in)
 
-PhysiqueAI supports optional physique photo upload for visual assessment. Click `[+ PHOTOS]` in the chat to upload front / side / back images.
+PhysiqueAI supports optional physique photo upload for visual assessment. Click `[+ PHOTOS]` in the chat to upload up to four images: FRONT, SIDE, BACK, and LEGS. All four are optional — the assessment adapts to what you provide.
 
 The vision assessment voice is intentionally constrained:
 - Body fat estimates use ranges, never single-point values
 - The agent refuses medical observations and stage-readiness timelines in weeks
 - Lighting, angle, and pose limits are acknowledged in every analysis
+- Lower body assessment is only provided when a legs photo is uploaded; otherwise the agent explicitly acknowledges the gap
 - No comparisons to named competitors or celebrity physiques
 
 **Privacy:** Photos are sent to Anthropic's API for the duration of the request only. They are not stored by PhysiqueAI in any form — not in localStorage, not in sessionStorage, not on disk. They are not used for training per Anthropic's data policy.
 
-**Cost:** Vision-enabled chat turns use ~5000-9000 input tokens vs ~2000 for text-only turns. With Claude Sonnet 4.5 pricing, expect each photo analysis to cost roughly $0.05–$0.10 in API credits.
+**Cost:** Vision-enabled chat turns use ~5000-11000 input tokens vs ~2000 for text-only turns, depending on how many photos are uploaded. With Claude Sonnet 4.5 pricing, expect each photo analysis to cost roughly $0.05–$0.13 in API credits.
 
 ## Privacy
 

@@ -2,7 +2,7 @@ export type Gender = 'male' | 'female';
 export type Phase = 'cut' | 'maintenance' | 'bulk' | 'peak_week';
 export type TrainingSplit = 'PPL' | 'upper_lower' | 'bro_split' | 'full_body' | 'other';
 
-export type PhysiquePose = 'front' | 'side' | 'back';
+export type PhysiquePose = 'front' | 'side' | 'back' | 'legs';
 export type PhotoMediaType =
   | 'image/jpeg'
   | 'image/png'

@@ -292,7 +292,7 @@ export const TOOL_SCHEMAS: Anthropic.Tool[] = [
   {
     name: 'analyze_physique',
     description:
-      'Analyze user-uploaded physique photos. Call this tool ONLY when the user has uploaded one or more images. The tool returns a structured rubric the agent must follow when producing the visual assessment. The agent then uses its own vision capability on the attached images to produce the actual analysis, constrained by the rubric.',
+      'Analyze user-uploaded physique photos. Call this tool ONLY when the user has uploaded one or more images. Supported poses: front, side, back, and legs (lower body). The tool returns a structured rubric the agent must follow when producing the visual assessment. The agent then uses its own vision capability on the attached images to produce the actual analysis, constrained by the rubric.',
     input_schema: {
       type: 'object',
       properties: {
@@ -326,9 +326,9 @@ export const TOOL_SCHEMAS: Anthropic.Tool[] = [
         },
         posesProvided: {
           type: 'array',
-          items: { type: 'string', enum: ['front', 'side', 'back'] },
+          items: { type: 'string', enum: ['front', 'side', 'back', 'legs'] },
           minItems: 1,
-          maxItems: 3,
+          maxItems: 4,
           description: 'Which poses the user has uploaded.',
         },
         userQuestion: {

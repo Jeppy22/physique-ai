@@ -16,7 +16,7 @@ const ALLOWED: PhotoMediaType[] = [
   'image/gif',
 ];
 
-const POSES: PhysiquePose[] = ['front', 'side', 'back'];
+const POSES: PhysiquePose[] = ['front', 'side', 'back', 'legs'];
 
 interface PhotoUploadPanelProps {
   photos: PhysiquePhoto[];
@@ -210,7 +210,7 @@ export function PhotoUploadPanel({
         className="mt-3 text-[10px] uppercase text-terminal-text-dim"
         style={{ letterSpacing: '0.1em' }}
       >
-        RECOMMENDED: NEUTRAL POSE, CONSISTENT LIGHTING, MINIMAL BACKGROUND CLUTTER.
+        RECOMMENDED: NEUTRAL POSES OR LIGHT FLEX FOR FRONT/SIDE/BACK. LEGS PHOTO CAN BE QUAD FLEX OR RELAXED STANDING. CONSISTENT LIGHTING, MINIMAL BACKGROUND CLUTTER.
       </div>
       <div
         className="mt-1 text-[10px] uppercase text-terminal-text-faint"

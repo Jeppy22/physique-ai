@@ -337,7 +337,7 @@ describe('flagWarningSigns', () => {
 });
 
 describe('analyzePhysique', () => {
-  it('male input with all three poses → rubric contains all five required sections', () => {
+  it('male input with all three poses → rubric contains all six required sections', () => {
     const out = analyzePhysique({
       lifterContext: {
         gender: 'male',
@@ -352,10 +352,11 @@ describe('analyzePhysique', () => {
     const sections = out.assessmentRubric.requiredSections.join('\n');
     expect(sections).toContain('OVERALL_CONDITIONING');
     expect(sections).toContain('MUSCULAR_DEVELOPMENT');
+    expect(sections).toContain('LOWER_BODY_DEVELOPMENT');
     expect(sections).toContain('SYMMETRY');
     expect(sections).toContain('POSING_QUALITY');
     expect(sections).toContain('STAGE_READINESS_CONTEXT');
-    expect(out.assessmentRubric.requiredSections.length).toBe(5);
+    expect(out.assessmentRubric.requiredSections.length).toBe(6);
     expect(out.citations.length).toBeGreaterThan(0);
   });
 
@@ -371,7 +372,7 @@ describe('analyzePhysique', () => {
       posesProvided: ['front'],
       userQuestion: 'Quick check on my front double bi.',
     });
-    expect(out.assessmentRubric.requiredSections.length).toBe(5);
+    expect(out.assessmentRubric.requiredSections.length).toBe(6);
     expect(out.assessmentRubric.forbiddenClaims.length).toBeGreaterThan(0);
     expect(out.assessmentRubric.voiceGuidance).toMatch(/qualified prep coach/i);
   });
@@ -413,5 +414,43 @@ describe('analyzePhysique', () => {
     );
     expect(comparisonClaim).toBeDefined();
     expect(comparisonClaim!.toLowerCase()).not.toContain('disordered');
+  });
+
+  it('includes LOWER_BODY_DEVELOPMENT in required sections when legs pose is provided', () => {
+    const result = analyzePhysique({
+      lifterContext: {
+        gender: 'male',
+        phase: 'cut',
+        weeksOutFromShow: 12,
+        bodyweightKg: 80,
+        statedBodyFatPercent: 12,
+      },
+      posesProvided: ['front', 'side', 'back', 'legs'],
+      userQuestion: 'how am I looking?',
+    });
+    expect(
+      result.assessmentRubric.requiredSections.some((s) =>
+        s.includes('LOWER_BODY_DEVELOPMENT'),
+      ),
+    ).toBe(true);
+  });
+
+  it('still includes LOWER_BODY_DEVELOPMENT as a section even when legs pose is NOT provided (agent uses it to acknowledge limitation)', () => {
+    const result = analyzePhysique({
+      lifterContext: {
+        gender: 'male',
+        phase: 'cut',
+        weeksOutFromShow: 12,
+        bodyweightKg: 80,
+        statedBodyFatPercent: 12,
+      },
+      posesProvided: ['front', 'side', 'back'],
+      userQuestion: 'how am I looking?',
+    });
+    expect(
+      result.assessmentRubric.requiredSections.some((s) =>
+        s.includes('LOWER_BODY_DEVELOPMENT'),
+      ),
+    ).toBe(true);
   });
 });

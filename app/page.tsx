@@ -6,9 +6,14 @@ import { StatsBar } from '@/components/stats-bar';
 import { OnboardingWizard } from '@/components/onboarding-wizard';
 import { TypewriterText } from '@/components/typewriter-text';
 import { BootSequence, type BootLine } from '@/components/boot-sequence';
+import { WelcomeScreen } from '@/components/welcome-screen';
 import {
   hasAnyData,
+  hasSeenWelcome,
+  hasSkippedOnboarding,
   loadLifterState,
+  markOnboardingSkipped,
+  markWelcomeSeen,
   saveLifterState,
 } from '@/lib/storage';
 import { DEFAULT_LIFTER_STATE } from '@/lib/types';
@@ -109,6 +114,8 @@ export default function Home() {
   const [hydrated, setHydrated] = useState(false);
   const [typeHeader, setTypeHeader] = useState(false);
   const [isEditingStats, setIsEditingStats] = useState(false);
+  const [welcomeVisible, setWelcomeVisible] = useState(false);
+  const [onboardingSkipped, setOnboardingSkipped] = useState(false);
   const [bootSequenceVisible, setBootSequenceVisible] = useState(false);
   const [shouldDelayStatsBarAnimation, setShouldDelayStatsBarAnimation] =
     useState(false);
@@ -120,6 +127,14 @@ export default function Home() {
     setLifterState(loaded);
     setSessionId(genSessionId());
     setClock(formatUTC(new Date()));
+
+    // First-visit welcome decision happens at hydration so the wizard
+    // doesn't briefly mount underneath the welcome.
+    const skipped = hasSkippedOnboarding();
+    setOnboardingSkipped(skipped);
+    if (!hasAnyData(loaded) && !hasSeenWelcome() && !skipped) {
+      setWelcomeVisible(true);
+    }
 
     // Once-per-session header typewriter.
     try {
@@ -137,6 +152,18 @@ export default function Home() {
     return () => clearInterval(id);
   }, []);
 
+  function handleWelcomeContinue() {
+    markWelcomeSeen();
+    setWelcomeVisible(false);
+  }
+
+  function handleWelcomeBypass() {
+    markWelcomeSeen();
+    markOnboardingSkipped();
+    setOnboardingSkipped(true);
+    setWelcomeVisible(false);
+  }
+
   useEffect(() => {
     if (!hydrated) return;
     const t = setTimeout(() => saveLifterState(lifterState), 300);
@@ -144,7 +171,10 @@ export default function Home() {
   }, [lifterState, hydrated]);
 
   const populated = hasAnyData(lifterState);
-  const showWizard = hydrated && (!populated || isEditingStats);
+  const showWizard =
+    hydrated &&
+    !welcomeVisible &&
+    (isEditingStats || (!populated && !onboardingSkipped));
   const wizardMode: 'first-visit' | 'edit' = populated ? 'edit' : 'first-visit';
 
   return (
@@ -198,6 +228,13 @@ export default function Home() {
             setBootSequenceVisible(false);
             setShouldDelayStatsBarAnimation(false);
           }}
+        />
+      )}
+
+      {welcomeVisible && (
+        <WelcomeScreen
+          onContinue={handleWelcomeContinue}
+          onBypass={handleWelcomeBypass}
         />
       )}
     </main>
