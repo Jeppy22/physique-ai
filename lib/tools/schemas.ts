@@ -289,4 +289,54 @@ export const TOOL_SCHEMAS: Anthropic.Tool[] = [
       ],
     },
   },
+  {
+    name: 'analyze_physique',
+    description:
+      'Analyze user-uploaded physique photos. Call this tool ONLY when the user has uploaded one or more images. The tool returns a structured rubric the agent must follow when producing the visual assessment. The agent then uses its own vision capability on the attached images to produce the actual analysis, constrained by the rubric.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        lifterContext: {
+          type: 'object',
+          properties: {
+            gender: {
+              type: 'string',
+              enum: ['male', 'female'],
+              description: 'Biological sex of the lifter.',
+            },
+            phase: {
+              type: 'string',
+              enum: ['cut', 'maintenance', 'bulk', 'peak_week'],
+              description: 'Current training/nutrition phase.',
+            },
+            weeksOutFromShow: {
+              type: ['number', 'null'],
+              description: 'Weeks remaining until the lifter\'s show, or null if no show is booked.',
+            },
+            bodyweightKg: {
+              type: ['number', 'null'],
+              description: 'Current bodyweight in kilograms, or null if not provided.',
+            },
+            statedBodyFatPercent: {
+              type: ['number', 'null'],
+              description: 'Self-reported body fat percentage, or null if not provided.',
+            },
+          },
+          required: ['gender', 'phase'],
+        },
+        posesProvided: {
+          type: 'array',
+          items: { type: 'string', enum: ['front', 'side', 'back'] },
+          minItems: 1,
+          maxItems: 3,
+          description: 'Which poses the user has uploaded.',
+        },
+        userQuestion: {
+          type: 'string',
+          description: 'The user\'s question or request alongside the photos.',
+        },
+      },
+      required: ['lifterContext', 'posesProvided', 'userQuestion'],
+    },
+  },
 ];

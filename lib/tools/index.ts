@@ -13,3 +13,6 @@ export type { PeakWeekInput, PeakWeekOutput, PeakWeekDay } from './generate-peak
 
 export { flagWarningSigns } from './flag-warning-signs';
 export type { WarningSignsInput, WarningSignsOutput } from './flag-warning-signs';
+
+export { analyzePhysique } from './analyze-physique';
+export type { AnalyzePhysiqueInput, AnalyzePhysiqueOutput } from './analyze-physique';

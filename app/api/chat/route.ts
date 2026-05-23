@@ -2,17 +2,61 @@ import Anthropic from '@anthropic-ai/sdk';
 import { TOOL_SCHEMAS } from '@/lib/tools/schemas';
 import { executeTool } from '@/lib/tools/dispatcher';
 import { buildSystemPrompt } from '@/lib/system-prompt';
-import type { LifterState } from '@/lib/types';
+import type {
+  LifterState,
+  PhotoMediaType,
+  PhysiquePhoto,
+} from '@/lib/types';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const MODEL = 'claude-sonnet-4-5-20250929';
 const MAX_TURNS = 5;
+const ALLOWED_MEDIA_TYPES: PhotoMediaType[] = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+];
+
+interface InboundMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  photos?: PhysiquePhoto[];
+}
 
 interface ChatRequestBody {
-  messages: Array<{ role: 'user' | 'assistant'; content: string }>;
+  messages: InboundMessage[];
   lifterState: LifterState | null;
+}
+
+function toUserContent(
+  message: InboundMessage,
+): string | Anthropic.ContentBlockParam[] {
+  const photos = message.photos ?? [];
+  const validPhotos = photos.filter(
+    (p) =>
+      typeof p.base64 === 'string' &&
+      p.base64.length > 0 &&
+      ALLOWED_MEDIA_TYPES.includes(p.mediaType),
+  );
+  if (validPhotos.length === 0) return message.content;
+
+  const blocks: Anthropic.ContentBlockParam[] = validPhotos.map((p) => ({
+    type: 'image',
+    source: {
+      type: 'base64',
+      media_type: p.mediaType,
+      data: p.base64,
+    },
+  }));
+  const posesNote = validPhotos.map((p) => p.pose).join(', ');
+  blocks.push({
+    type: 'text',
+    text: `[PHOTOS ATTACHED: ${posesNote}]\n\n${message.content}`,
+  });
+  return blocks;
 }
 
 function toContentBlockParams(
@@ -84,9 +128,18 @@ export async function POST(req: Request) {
 
       try {
         const anthropicMessages: Anthropic.MessageParam[] = body.messages.map(
-          (m) => ({ role: m.role, content: m.content }),
+          (m) =>
+            m.role === 'user'
+              ? { role: 'user', content: toUserContent(m) }
+              : { role: 'assistant', content: m.content },
         );
-        const systemPrompt = buildSystemPrompt(body.lifterState);
+        const latest = body.messages[body.messages.length - 1];
+        const hasImagesInLatest =
+          latest?.role === 'user' && (latest.photos?.length ?? 0) > 0;
+        const systemPrompt = buildSystemPrompt(
+          body.lifterState,
+          hasImagesInLatest,
+        );
 
         for (let turn = 0; turn < MAX_TURNS; turn++) {
           if (signal.aborted) break;

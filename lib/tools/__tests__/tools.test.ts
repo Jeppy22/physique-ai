@@ -4,6 +4,7 @@ import {
   assessMacros,
   generatePeakWeek,
   flagWarningSigns,
+  analyzePhysique,
 } from '../index';
 
 describe('projectWeightTrajectory', () => {
@@ -332,5 +333,85 @@ describe('flagWarningSigns', () => {
       out.flags.some((f) => f.flag.toLowerCase().includes('weight loss')),
     ).toBe(true);
     expect(out.recommendation).toBe('pull_back_significantly');
+  });
+});
+
+describe('analyzePhysique', () => {
+  it('male input with all three poses → rubric contains all five required sections', () => {
+    const out = analyzePhysique({
+      lifterContext: {
+        gender: 'male',
+        phase: 'cut',
+        weeksOutFromShow: 12,
+        bodyweightKg: 80,
+        statedBodyFatPercent: 12,
+      },
+      posesProvided: ['front', 'side', 'back'],
+      userQuestion: 'How am I looking for my cut?',
+    });
+    const sections = out.assessmentRubric.requiredSections.join('\n');
+    expect(sections).toContain('OVERALL_CONDITIONING');
+    expect(sections).toContain('MUSCULAR_DEVELOPMENT');
+    expect(sections).toContain('SYMMETRY');
+    expect(sections).toContain('POSING_QUALITY');
+    expect(sections).toContain('STAGE_READINESS_CONTEXT');
+    expect(out.assessmentRubric.requiredSections.length).toBe(5);
+    expect(out.citations.length).toBeGreaterThan(0);
+  });
+
+  it('single-pose input still produces a structurally valid rubric', () => {
+    const out = analyzePhysique({
+      lifterContext: {
+        gender: 'male',
+        phase: 'maintenance',
+        weeksOutFromShow: null,
+        bodyweightKg: null,
+        statedBodyFatPercent: null,
+      },
+      posesProvided: ['front'],
+      userQuestion: 'Quick check on my front double bi.',
+    });
+    expect(out.assessmentRubric.requiredSections.length).toBe(5);
+    expect(out.assessmentRubric.forbiddenClaims.length).toBeGreaterThan(0);
+    expect(out.assessmentRubric.voiceGuidance).toMatch(/qualified prep coach/i);
+  });
+
+  it('female input includes the female-specific comparison warning in forbiddenClaims', () => {
+    const out = analyzePhysique({
+      lifterContext: {
+        gender: 'female',
+        phase: 'cut',
+        weeksOutFromShow: 16,
+        bodyweightKg: 60,
+        statedBodyFatPercent: 20,
+      },
+      posesProvided: ['front', 'side'],
+      userQuestion: 'How does my conditioning compare?',
+    });
+    const comparisonClaim = out.assessmentRubric.forbiddenClaims.find((c) =>
+      c.toLowerCase().includes('competitors'),
+    );
+    expect(comparisonClaim).toBeDefined();
+    expect(comparisonClaim!.toLowerCase()).toContain('female');
+    expect(comparisonClaim!.toLowerCase()).toContain('disordered');
+  });
+
+  it('male input omits the female-specific clause from the comparison forbidden claim', () => {
+    const out = analyzePhysique({
+      lifterContext: {
+        gender: 'male',
+        phase: 'cut',
+        weeksOutFromShow: 8,
+        bodyweightKg: 78,
+        statedBodyFatPercent: 11,
+      },
+      posesProvided: ['front', 'side', 'back'],
+      userQuestion: 'Where am I at?',
+    });
+    const comparisonClaim = out.assessmentRubric.forbiddenClaims.find((c) =>
+      c.toLowerCase().includes('competitors'),
+    );
+    expect(comparisonClaim).toBeDefined();
+    expect(comparisonClaim!.toLowerCase()).not.toContain('disordered');
   });
 });

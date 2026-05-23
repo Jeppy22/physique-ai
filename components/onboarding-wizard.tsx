@@ -18,7 +18,7 @@ import { cn } from '@/lib/utils';
 interface OnboardingWizardProps {
   initialState: LifterState;
   mode: 'first-visit' | 'edit';
-  onComplete: (state: LifterState) => void;
+  onComplete: (state: LifterState, isFirstVisit: boolean) => void;
   onCancel?: () => void;
 }
 
@@ -599,7 +599,7 @@ export function OnboardingWizard({
             {step === 2 && (
               <button
                 type="button"
-                onClick={() => onComplete(draft)}
+                onClick={() => onComplete(draft, mode === 'first-visit')}
                 className="text-[11px] font-bold uppercase text-terminal-text-dim transition-colors hover:text-terminal-text"
                 style={{ letterSpacing: '0.15em' }}
               >
@@ -611,7 +611,7 @@ export function OnboardingWizard({
               disabled={!canNext}
               onClick={() => {
                 if (step < 2) setStep((s) => (s + 1) as 0 | 1 | 2);
-                else onComplete(draft);
+                else onComplete(draft, mode === 'first-visit');
               }}
               className={cn(
                 'text-[11px] font-bold uppercase transition-colors',

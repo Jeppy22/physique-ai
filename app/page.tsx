@@ -5,6 +5,7 @@ import { ChatPanel } from '@/components/chat-panel';
 import { StatsBar } from '@/components/stats-bar';
 import { OnboardingWizard } from '@/components/onboarding-wizard';
 import { TypewriterText } from '@/components/typewriter-text';
+import { BootSequence, type BootLine } from '@/components/boot-sequence';
 import {
   hasAnyData,
   loadLifterState,
@@ -14,6 +15,16 @@ import { DEFAULT_LIFTER_STATE } from '@/lib/types';
 import type { LifterState } from '@/lib/types';
 
 const HEADER_TYPED_FLAG = 'physique-ai-header-typed';
+
+// Note: numbers reflect current tool/citation counts. Update if
+// lib/tools/schemas.ts or system prompt citations change.
+const BOOT_LINES: BootLine[] = [
+  { text: 'LIFTER_PROFILE LOADED', status: 'OK' },
+  { text: 'SYSTEM_PROMPT COMPILED', status: 'OK' },
+  { text: 'TOOLS REGISTERED: 4', status: 'OK' },
+  { text: 'CITATIONS INDEXED: 5', status: 'OK' },
+  { text: 'AGENT READY', status: 'CONNECTED' },
+];
 
 function formatUTC(d: Date): string {
   const h = String(d.getUTCHours()).padStart(2, '0');
@@ -98,6 +109,9 @@ export default function Home() {
   const [hydrated, setHydrated] = useState(false);
   const [typeHeader, setTypeHeader] = useState(false);
   const [isEditingStats, setIsEditingStats] = useState(false);
+  const [bootSequenceVisible, setBootSequenceVisible] = useState(false);
+  const [shouldDelayStatsBarAnimation, setShouldDelayStatsBarAnimation] =
+    useState(false);
   const [sessionId, setSessionId] = useState<string>('');
   const [clock, setClock] = useState<string>('');
 
@@ -145,27 +159,45 @@ export default function Home() {
         <StatsBar
           lifterState={lifterState}
           onEdit={() => setIsEditingStats(true)}
+          freezeAnimations={shouldDelayStatsBarAnimation}
         />
       ) : (
         <StatsBarLoadingShell />
       )}
       <section className="flex min-h-0 flex-1 flex-col">
-        <ChatPanel lifterState={hydrated ? lifterState : null} />
+        <ChatPanel
+          lifterState={hydrated ? lifterState : null}
+          disabled={bootSequenceVisible}
+        />
       </section>
 
       {showWizard && (
         <OnboardingWizard
           initialState={lifterState}
           mode={wizardMode}
-          onComplete={(next) => {
+          onComplete={(next, isFirstVisit) => {
             setLifterState(next);
             setIsEditingStats(false);
+            if (isFirstVisit) {
+              setShouldDelayStatsBarAnimation(true);
+              setBootSequenceVisible(true);
+            }
           }}
           onCancel={
             wizardMode === 'edit'
               ? () => setIsEditingStats(false)
               : undefined
           }
+        />
+      )}
+
+      {bootSequenceVisible && (
+        <BootSequence
+          lines={BOOT_LINES}
+          onComplete={() => {
+            setBootSequenceVisible(false);
+            setShouldDelayStatsBarAnimation(false);
+          }}
         />
       )}
     </main>

@@ -15,6 +15,7 @@ import { ScrambleText } from './scramble-text';
 interface StatsBarProps {
   lifterState: LifterState;
   onEdit: () => void;
+  freezeAnimations?: boolean;
 }
 
 /* ---------- summary string ---------- */
@@ -87,7 +88,11 @@ function buildSummary(
 
 /* ---------- main ---------- */
 
-export function StatsBar({ lifterState, onEdit }: StatsBarProps) {
+export function StatsBar({
+  lifterState,
+  onEdit,
+  freezeAnimations = false,
+}: StatsBarProps) {
   const [weightUnit] = useState<WeightUnit>('kg');
   const [heightUnit] = useState<HeightUnit>('cm');
 
@@ -99,15 +104,32 @@ export function StatsBar({ lifterState, onEdit }: StatsBarProps) {
   // Diff-based chip animation: track which indices changed since the last render.
   const prevPartsRef = useRef<string[]>([]);
   const mountedRef = useRef(false);
+  const prevFreezeRef = useRef<boolean>(freezeAnimations);
   const [animatingDelays, setAnimatingDelays] = useState<Map<number, number>>(
     () => new Map(),
   );
   const partsKey = summaryParts.join('|');
 
+  // When freezeAnimations flips true → false, force every current chip to
+  // appear "new" so the diff effect below scrambles them all in.
+  useEffect(() => {
+    if (prevFreezeRef.current === true && freezeAnimations === false) {
+      prevPartsRef.current = [];
+    }
+    prevFreezeRef.current = freezeAnimations;
+  }, [freezeAnimations]);
+
   useEffect(() => {
     if (!mountedRef.current) {
       // First render — never animate, just capture the baseline.
       mountedRef.current = true;
+      prevPartsRef.current = summaryParts;
+      return;
+    }
+
+    if (freezeAnimations) {
+      // Frozen: don't trigger any scramble; keep the baseline in sync so
+      // changes that happen while frozen don't replay later.
       prevPartsRef.current = summaryParts;
       return;
     }
@@ -133,7 +155,7 @@ export function StatsBar({ lifterState, onEdit }: StatsBarProps) {
     const t = setTimeout(() => setAnimatingDelays(new Map()), clearMs);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [partsKey]);
+  }, [partsKey, freezeAnimations]);
 
   return (
     <div

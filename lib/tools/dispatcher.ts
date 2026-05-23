@@ -3,13 +3,15 @@ import {
   assessMacros,
   generatePeakWeek,
   flagWarningSigns,
+  analyzePhysique,
 } from './index';
 
 export type ToolName =
   | 'project_weight_trajectory'
   | 'assess_macros'
   | 'generate_peak_week'
-  | 'flag_warning_signs';
+  | 'flag_warning_signs'
+  | 'analyze_physique';
 
 export interface ToolCallResult {
   toolName: ToolName;
@@ -47,6 +49,12 @@ export async function executeTool(
           toolName: name,
           input,
           output: flagWarningSigns(input as never),
+        };
+      case 'analyze_physique':
+        return {
+          toolName: name,
+          input,
+          output: analyzePhysique(input as never),
         };
       default:
         return {

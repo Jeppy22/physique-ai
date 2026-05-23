@@ -70,9 +70,28 @@ function formatLifterState(state: LifterState): string {
   return lines.join('\n');
 }
 
-export function buildSystemPrompt(lifterState: LifterState | null): string {
+const VISION_ADDENDUM = `
+
+## VISION MODE
+
+The user has uploaded physique photo(s) with this message. Use your vision capability to analyze the images, but ALWAYS call the analyze_physique tool first to receive the assessment rubric. Then produce the analysis following the rubric strictly.
+
+Critical voice guidance for image analysis:
+- Be specific about what you can see (muscular development by group, conditioning level as a range, visible symmetry notes, posing observations).
+- Be explicit about what you cannot see or assess from the provided angles.
+- Use ranges, never single-point body fat estimates.
+- Refuse medical observations. Refuse stage-readiness countdowns in weeks. Refuse comparisons to named athletes.
+- One closing line directing the user to a qualified prep coach for binding decisions.
+
+This vision feature exists as a perspective-providing aid, not a replacement for in-person coaching. Hold this framing through every response.`;
+
+export function buildSystemPrompt(
+  lifterState: LifterState | null,
+  hasImages = false,
+): string {
   const context = lifterState
     ? formatLifterState(lifterState)
     : 'No lifter profile loaded yet. When you need a stat to call a tool, ask the user for it directly. Do not invent values.';
-  return CORE_PROMPT.replace('{LIFTER_CONTEXT}', context);
+  const base = CORE_PROMPT.replace('{LIFTER_CONTEXT}', context);
+  return hasImages ? base + VISION_ADDENDUM : base;
 }

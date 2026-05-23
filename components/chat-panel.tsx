@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { streamChat } from '@/lib/chat-client';
-import type { LifterState } from '@/lib/types';
+import type { LifterState, PhysiquePhoto } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { PhotoUploadPanel } from '@/components/photo-upload-panel';
 
 type ToolStatus = 'running' | 'done' | 'error';
 
@@ -20,6 +21,7 @@ interface ChatMessage {
   pendingBuffer?: string;       // assistant only: chars waiting to be drained
   isApiStreaming?: boolean;     // assistant only: true while API is still streaming
   toolCalls?: ToolCall[];
+  photos?: PhysiquePhoto[];     // user only: attached images for vision turn
   createdAt: number;
 }
 
@@ -99,6 +101,27 @@ function MessageBlock({
         {prefix} &gt; {fmtTime(message.createdAt)}
       </div>
 
+      {isUser && message.photos && message.photos.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-2">
+          {message.photos.map((p) => (
+            <div key={p.pose} className="border border-terminal-border">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={p.dataUrl}
+                alt={p.pose}
+                className="h-16 w-16 object-cover"
+              />
+              <div
+                className="py-0.5 text-center text-[9px] uppercase text-terminal-text-dim"
+                style={{ letterSpacing: '0.1em' }}
+              >
+                {p.pose}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {message.toolCalls && message.toolCalls.length > 0 && (
         <div className="mb-2 flex flex-col gap-0">
           {message.toolCalls.map((tc) => (
@@ -127,12 +150,16 @@ function MessageBlock({
 
 export function ChatPanel({
   lifterState,
+  disabled = false,
 }: {
   lifterState: LifterState | null;
+  disabled?: boolean;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
+  const [showPhotoUpload, setShowPhotoUpload] = useState(false);
+  const [pendingPhotos, setPendingPhotos] = useState<PhysiquePhoto[]>([]);
   const abortRef = useRef<AbortController | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const scrollEndRef = useRef<HTMLDivElement | null>(null);
@@ -241,15 +268,19 @@ export function ChatPanel({
     const trimmed = input.trim();
     if (!trimmed || isStreaming) return;
 
+    const photosForTurn = pendingPhotos.length > 0 ? pendingPhotos : undefined;
     const userMessage: ChatMessage = {
       id: `u-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       role: 'user',
       content: trimmed,
+      photos: photosForTurn,
       createdAt: Date.now(),
     };
     const updatedMessages = [...messages, userMessage];
     setMessages(updatedMessages);
     setInput('');
+    setPendingPhotos([]);
+    setShowPhotoUpload(false);
     setIsStreaming(true);
 
     const assistantId = `a-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -263,6 +294,7 @@ export function ChatPanel({
       .map((m) => ({
         role: m.role as 'user' | 'assistant',
         content: m.content,
+        photos: m.role === 'user' ? m.photos : undefined,
       }));
 
     await streamChat(
@@ -324,7 +356,7 @@ export function ChatPanel({
       },
       controller.signal,
     );
-  }, [input, isStreaming, messages, lifterState, ensureAssistantMessage]);
+  }, [input, isStreaming, messages, lifterState, ensureAssistantMessage, pendingPhotos]);
 
   const handleStop = useCallback(() => {
     abortRef.current?.abort();
@@ -391,7 +423,8 @@ export function ChatPanel({
               className="m-0 whitespace-pre font-mono text-[13px] leading-[1.6] text-terminal-text-dim"
               style={{ letterSpacing: '0.02em' }}
             >
-              <span className="text-terminal-amber-dim">{'>'}</span> NO_MESSAGES
+              <span className="text-terminal-amber-dim">{'>'}</span>{' '}
+              {disabled ? 'SYSTEM_INIT IN PROGRESS' : 'NO_MESSAGES'}
               {'\n'}
               <span className="text-terminal-amber-dim">{'>'}</span>
               {'\n'}
@@ -416,16 +449,63 @@ export function ChatPanel({
         </div>
       </div>
 
+      {showPhotoUpload && (
+        <div className="border-t border-terminal-border bg-terminal-bg-elevated px-4 py-3">
+          <div className="mx-auto max-w-3xl">
+            <PhotoUploadPanel
+              photos={pendingPhotos}
+              onChange={setPendingPhotos}
+              onClose={() => setShowPhotoUpload(false)}
+            />
+          </div>
+        </div>
+      )}
+
       <div className="border-t border-terminal-border bg-terminal-bg-elevated px-4 py-3">
         <div className="mx-auto flex max-w-3xl items-end gap-3">
+          {!showPhotoUpload && pendingPhotos.length === 0 && (
+            <button
+              type="button"
+              onClick={() => setShowPhotoUpload(true)}
+              disabled={disabled}
+              className={cn(
+                'text-[11px] font-bold uppercase transition-colors',
+                disabled
+                  ? 'cursor-not-allowed text-terminal-text-faint'
+                  : 'text-terminal-amber hover:brightness-125',
+              )}
+              style={{ letterSpacing: '0.15em' }}
+              aria-label="Attach physique photos"
+            >
+              [+ PHOTOS]
+            </button>
+          )}
+          {pendingPhotos.length > 0 && !showPhotoUpload && (
+            <button
+              type="button"
+              onClick={() => setShowPhotoUpload(true)}
+              className="text-[11px] font-bold uppercase text-terminal-amber transition-colors hover:brightness-125"
+              style={{ letterSpacing: '0.15em' }}
+            >
+              [{pendingPhotos.length} PHOTO{pendingPhotos.length > 1 ? 'S' : ''} ATTACHED ▸]
+            </button>
+          )}
           <textarea
             ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="> ENTER QUERY..."
+            placeholder={
+              disabled ? '> SYSTEM INITIALIZING...' : '> ENTER QUERY...'
+            }
             rows={1}
-            className="min-h-[24px] flex-1 resize-none border-none bg-transparent text-[13px] text-terminal-text placeholder:text-terminal-text-faint focus:outline-none"
+            disabled={disabled}
+            className={cn(
+              'min-h-[24px] flex-1 resize-none border-none bg-transparent text-[13px] focus:outline-none',
+              disabled
+                ? 'cursor-not-allowed text-terminal-text-faint placeholder:text-terminal-text-faint'
+                : 'text-terminal-text placeholder:text-terminal-text-faint',
+            )}
           />
           {isStreaming ? (
             <button
@@ -440,10 +520,10 @@ export function ChatPanel({
             <button
               type="button"
               onClick={handleSend}
-              disabled={!input.trim()}
+              disabled={disabled || !input.trim()}
               className={cn(
                 'text-[11px] font-bold uppercase transition-colors',
-                input.trim()
+                !disabled && input.trim()
                   ? 'text-terminal-amber hover:brightness-125'
                   : 'cursor-not-allowed text-terminal-text-faint',
               )}

@@ -1,4 +1,10 @@
-import type { LifterState } from './types';
+import type { LifterState, PhysiquePhoto } from './types';
+
+export interface ChatMessageInput {
+  role: 'user' | 'assistant';
+  content: string;
+  photos?: PhysiquePhoto[]; // only on user messages
+}
 
 export interface ChatStreamCallbacks {
   onTextDelta: (text: string) => void;
@@ -40,7 +46,7 @@ function dispatch(event: SSEEvent, cb: ChatStreamCallbacks) {
 }
 
 export async function streamChat(
-  messages: Array<{ role: 'user' | 'assistant'; content: string }>,
+  messages: ChatMessageInput[],
   lifterState: LifterState | null,
   callbacks: ChatStreamCallbacks,
   signal: AbortSignal,
