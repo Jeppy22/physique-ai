@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { parseAssistantContent } from '../parse-ratings';
+import {
+  parseAssistantContent,
+  stripRatingsBlockForStream,
+} from '../parse-ratings';
 
 describe('parseAssistantContent', () => {
   it('extracts ratings from valid response', () => {
@@ -37,5 +40,26 @@ describe('parseAssistantContent', () => {
     const parsed = parseAssistantContent(raw);
     expect(parsed.prose).toBe(raw);
     expect(parsed.ratings).toBeNull();
+  });
+});
+
+describe('stripRatingsBlockForStream', () => {
+  it('strips ratings fence and everything after', () => {
+    const input = `Here is my assessment.\n\nLots of prose.\n\n\`\`\`ratings\n[{"group":"chest","rating":"SOLID"}]\n\`\`\``;
+    expect(stripRatingsBlockForStream(input)).toBe(
+      'Here is my assessment.\n\nLots of prose.',
+    );
+  });
+
+  it('returns content unchanged when no fence is present', () => {
+    const input = `Just regular prose, no fence.`;
+    expect(stripRatingsBlockForStream(input)).toBe(input);
+  });
+
+  it('handles partial fence mid-stream (does not strip until full fence appears)', () => {
+    // While the typewriter is mid-typing "```ratings" char by char, indexOf
+    // returns -1 until the whole substring lands. We must NOT strip before that.
+    const input = `Some prose.\n\n\`\`\`rat`;
+    expect(stripRatingsBlockForStream(input)).toBe(input);
   });
 });

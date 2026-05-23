@@ -6,7 +6,11 @@ import type { LifterState, PhysiquePhoto } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { PhotoUploadPanel } from '@/components/photo-upload-panel';
 import { MuscleRatingsTable } from '@/components/muscle-ratings-table';
-import { parseAssistantContent } from '@/lib/parse-ratings';
+import {
+  RATINGS_FENCE,
+  parseAssistantContent,
+  stripRatingsBlockForStream,
+} from '@/lib/parse-ratings';
 
 type ToolStatus = 'running' | 'done' | 'error';
 
@@ -101,7 +105,18 @@ function MessageBlock({
   const parsed = isAssistantDone
     ? parseAssistantContent(message.content)
     : null;
-  const displayContent = parsed ? parsed.prose : message.content;
+  // During streaming, hide the ```ratings fence (and everything after) from
+  // the rendered prose. The parser still sees the full content once streaming
+  // completes and the table swaps in.
+  const streamingVisible =
+    message.role === 'assistant'
+      ? stripRatingsBlockForStream(message.content)
+      : message.content;
+  const displayContent = parsed ? parsed.prose : streamingVisible;
+  // Cursor only blinks while text is actively appearing in the visible area.
+  const cursorAllowed =
+    message.role !== 'assistant' ||
+    streamingVisible === message.content;
 
   return (
     <div className="border-t border-terminal-border pt-3">
@@ -144,12 +159,12 @@ function MessageBlock({
       {displayContent ? (
         <div className="whitespace-pre-wrap text-[13px] leading-relaxed text-terminal-text">
           {displayContent}
-          {showStreamingCursor && (
+          {showStreamingCursor && cursorAllowed && (
             <span className="terminal-blink ml-1 text-terminal-amber">●</span>
           )}
         </div>
       ) : (
-        showStreamingCursor && (
+        showStreamingCursor && cursorAllowed && (
           <div className="text-[13px] leading-relaxed text-terminal-text">
             <span className="terminal-blink text-terminal-amber">●</span>
           </div>
@@ -203,8 +218,14 @@ export function ChatPanel({
         }
 
         const bufferLen = last.pendingBuffer.length;
+        const combined = last.content + last.pendingBuffer;
+        const fenceIndex = combined.indexOf(RATINGS_FENCE);
+        const inHiddenRegion =
+          fenceIndex !== -1 && last.content.length >= fenceIndex;
+
         let rate: number;
         if (!last.isApiStreaming) rate = 600;
+        else if (inHiddenRegion) rate = 600;
         else if (bufferLen > 500) rate = 400;
         else if (bufferLen > 200) rate = 150;
         else rate = 70;

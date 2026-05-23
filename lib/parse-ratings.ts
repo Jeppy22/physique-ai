@@ -18,6 +18,19 @@ export interface ParsedAssistantContent {
 }
 
 const RATINGS_BLOCK = /```ratings\s*\n([\s\S]*?)```/;
+export const RATINGS_FENCE = '```ratings';
+
+/**
+ * Returns the portion of an assistant message that should be visible while it
+ * streams. Once the ```ratings fence has fully appeared in `content`, the fence
+ * and everything after it are hidden from the rendered prose; the parser still
+ * sees the full string when streaming finishes.
+ */
+export function stripRatingsBlockForStream(content: string): string {
+  const fenceIndex = content.indexOf(RATINGS_FENCE);
+  if (fenceIndex === -1) return content;
+  return content.slice(0, fenceIndex).trimEnd();
+}
 
 export function parseAssistantContent(raw: string): ParsedAssistantContent {
   const match = raw.match(RATINGS_BLOCK);
